@@ -1,0 +1,3 @@
+[submodule "build/piolibdeps/megaatmega2560/LibRobus"]
+	path = build/piolibdeps/megaatmega2560/LibRobus
+	url = https://github.com/UdeS-GRO/LibRobUS.git
