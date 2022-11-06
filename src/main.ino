@@ -178,7 +178,7 @@ void AvancerMasterSlave(float distance)
     ENCODER_Reset(LEFT);
     ENCODER_Reset(RIGHT);
 	float kp = 0.0005;
-	float ki = 0.00005;
+	float ki = 0.00002;
 	float erreurTotale = 0;
 
     int PULSE_PAR_UNIT = 3200 / (3 * PI); // 3pouces de diametres = 7,62 cm
@@ -191,7 +191,7 @@ void AvancerMasterSlave(float distance)
     while (nbPulseFait < nbPulseAFaire)
     {
     	float erreur = 0;
-    	delay(200);
+    	delay(100);
 		int pulseLeft = ENCODER_Read(LEFT);
 		int pulseRight = ENCODER_Read(RIGHT);
 		nbPulseFait += pulseLeft;
@@ -202,20 +202,7 @@ void AvancerMasterSlave(float distance)
 
         float correction = erreur * kp + erreurTotale * ki;
 		float newSpeed = previousSpeed + correction;
-		Serial.print("Nb pusle gauche : ");
-		Serial.print(pulseLeft);
-		Serial.print(" ------ Nb pusle droit : ");
-		Serial.println(pulseRight);
-		Serial.print("Nb total gauche : ");
-		Serial.print(nbPulseFait);
-		Serial.print(" ------ Nb total droit : ");
-		Serial.println(nbPulseVoulu);
-		Serial.print("erreur : ");
-		Serial.print(erreur);
-		Serial.print(" ----- Erreur totale : ");
-		Serial.print(erreurTotale);
-		Serial.print("\n");
-		Serial.print("\n");
+		
 		ENCODER_Reset(LEFT);
     	ENCODER_Reset(RIGHT);
 		MOTOR_SetSpeed(LEFT, newSpeed);
@@ -225,7 +212,7 @@ void AvancerMasterSlave(float distance)
     MOTOR_SetSpeed(1, 0);
 }
 
-void faireArc(int couleur)
+void FaireArc(int couleur)
 {
 	float rayonGauche = couleur * 12 + 6 + 3.625; //3.625 = moitié largeur robot
 	float rayonDroit = couleur * 12 + 6 - 3.625;
@@ -259,7 +246,7 @@ void faireArc(int couleur)
 		nbPulseVoulu += pulseRight*ratio;
 
 		erreur = pulseRight*ratio - pulseLeft;
-		erreurTotale += nbPulseVoulu - nbPulseFaitGauche;
+		erreurTotale = nbPulseVoulu - nbPulseFaitGauche;
 
         float correction = erreur * kp + erreurTotale * ki;
 		float newSpeed = previousSpeed + correction;
@@ -426,8 +413,11 @@ void loop()
 	{
 		// Différentes parties du parcours
 
-		//AvancerMasterSlave(84);
-		testIR();
+		
+		FaireArc(JAUNE);
+		AvancerMasterSlave(24);
+		FaireArc(JAUNE);
+		AvancerMasterSlave(8*12);
 
 
 		while (true)
@@ -440,7 +430,7 @@ void loop()
 		// Différentes parties du parcours
 
 		//AvancerMasterSlave(84);
-		faireArc(JAUNE);
+		AvancerMasterSlave(48);
 
 
 		while (true)
@@ -453,7 +443,7 @@ void loop()
 		// Différentes parties du parcours
 
 		//AvancerMasterSlave(84);
-		faireArc(VERT);
+		FaireArc(VERT);
 
 
 		while (true)
@@ -466,7 +456,7 @@ void loop()
 		// Différentes parties du parcours
 
 		//AvancerMasterSlave(84);
-		faireArc(BLEU);
+		FaireArc(BLEU);
 
 
 		while (true)
