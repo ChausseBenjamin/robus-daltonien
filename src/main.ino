@@ -356,9 +356,9 @@ SmallestIR TrouverPlusPetitIR(int leftValue, int rightValue, int frontValue)
 
 void Reorienter()
 {
-	// 500
+	// 597
 	// 163
-	// 100
+	// 102
 	// 82
 
 	// LEFT = 0
