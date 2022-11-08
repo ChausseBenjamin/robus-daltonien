@@ -487,16 +487,17 @@ void loop()
 {
 	// SOFT_TIMER_Update(); // A decommenter pour utiliser des compteurs logiciels
 	delay(100); // Delais pour décharger le CPU
-	if (ROBUS_IsBumper(REAR))
+	/*if (ROBUS_IsBumper(REAR))
 	{
 		// Différentes parties du parcours
 		Reorienter();
 
 		while (true)
 		{
-			/* do nothing --- needed to stop "loop" */
+			/* do nothing --- needed to stop "loop" 
 		}
-	}
+	}*/
+	
 	if (ROBUS_IsBumper(LEFT))
 	{
 		// Différentes parties du parcours
