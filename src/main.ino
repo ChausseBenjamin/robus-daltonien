@@ -73,7 +73,6 @@ void AvancerDistanceAccel(float distance)
 			{
 				nbPulseVouluParIntervalle = MIN_PULSE_PAR_INTERVALLE;
 			}
-		
 		}
 		else if (nbPulseVouluParIntervalle < MAX_PULSE_PAR_INTERVALLE)
 		{
@@ -174,24 +173,24 @@ void AvancerDistanceConstant(float distance)
 
 void AvancerMasterSlave(float distance)
 {
-	//Right = master
-    ENCODER_Reset(LEFT);
-    ENCODER_Reset(RIGHT);
+	// Right = master
+	ENCODER_Reset(LEFT);
+	ENCODER_Reset(RIGHT);
 	float kp = 0.0005;
-	float ki = 0.00005;
+	float ki = 0.00002;
 	float erreurTotale = 0;
 
-    int PULSE_PAR_UNIT = 3200 / (3 * PI); // 3pouces de diametres = 7,62 cm
+	int PULSE_PAR_UNIT = 3200 / (3 * PI); // 3pouces de diametres = 7,62 cm
 	float nbPulseAFaire = distance * PULSE_PAR_UNIT;
 	float nbPulseFait = 0;
 	float nbPulseVoulu = 0;
-	float previousSpeed = 0.25;
-	MOTOR_SetSpeed(LEFT, 0.25);
+	float previousSpeed = 0.27;
+	MOTOR_SetSpeed(LEFT, 0.27);
 	MOTOR_SetSpeed(RIGHT, 0.25);
-    while (nbPulseFait < nbPulseAFaire)
-    {
-    	float erreur = 0;
-    	delay(200);
+	while (nbPulseFait < nbPulseAFaire)
+	{
+		float erreur = 0;
+		delay(40);
 		int pulseLeft = ENCODER_Read(LEFT);
 		int pulseRight = ENCODER_Read(RIGHT);
 		nbPulseFait += pulseLeft;
@@ -200,37 +199,24 @@ void AvancerMasterSlave(float distance)
 		erreur = pulseRight - pulseLeft;
 		erreurTotale = nbPulseVoulu - nbPulseFait;
 
-        float correction = erreur * kp + erreurTotale * ki;
+		float correction = erreur * kp + erreurTotale * ki;
 		float newSpeed = previousSpeed + correction;
-		Serial.print("Nb pusle gauche : ");
-		Serial.print(pulseLeft);
-		Serial.print(" ------ Nb pusle droit : ");
-		Serial.println(pulseRight);
-		Serial.print("Nb total gauche : ");
-		Serial.print(nbPulseFait);
-		Serial.print(" ------ Nb total droit : ");
-		Serial.println(nbPulseVoulu);
-		Serial.print("erreur : ");
-		Serial.print(erreur);
-		Serial.print(" ----- Erreur totale : ");
-		Serial.print(erreurTotale);
-		Serial.print("\n");
-		Serial.print("\n");
+
 		ENCODER_Reset(LEFT);
-    	ENCODER_Reset(RIGHT);
+		ENCODER_Reset(RIGHT);
 		MOTOR_SetSpeed(LEFT, newSpeed);
-		previousSpeed = newSpeed;    
-    }
-    MOTOR_SetSpeed(0, 0);
-    MOTOR_SetSpeed(1, 0);
+		previousSpeed = newSpeed;
+	}
+	MOTOR_SetSpeed(0, 0);
+	MOTOR_SetSpeed(1, 0);
 }
 
-void faireArc(int couleur)
+void FaireArc(int couleur)
 {
-	float rayonGauche = couleur * 12 + 6 + 3.625; //3.625 = moitié largeur robot
+	float rayonGauche = couleur * 12 + 6 + 3.625; // 3.625 = moitié largeur robot
 	float rayonDroit = couleur * 12 + 6 - 3.625;
 
-	float arcGauche = 2 * PI * rayonGauche * 0.25; //0.25 = 90/360
+	float arcGauche = 2 * PI * rayonGauche * 0.25; // 0.25 = 90/360
 	float arcDroit = 2 * PI * rayonDroit * 0.25;
 
 	int PULSE_PAR_UNIT = 3200 / (3 * PI); // 3pouces de diametres = 7,62 cm
@@ -239,40 +225,40 @@ void faireArc(int couleur)
 
 	float ratio = nbPulseAFaireGauche / nbPulseAFaireDroit;
 	ENCODER_Reset(LEFT);
-    ENCODER_Reset(RIGHT);
+	ENCODER_Reset(RIGHT);
 	float kp = 0.0005;
 	float ki = 0.00002;
 	float erreurTotale = 0;
 
 	float nbPulseFaitGauche = 0;
 	float nbPulseVoulu = 0;
-	float previousSpeed = 0.25 * ratio;
-	MOTOR_SetSpeed(LEFT, 0.25 * ratio);
+	float previousSpeed = 0.27 * ratio;
+	MOTOR_SetSpeed(LEFT, 0.27 * ratio);
 	MOTOR_SetSpeed(RIGHT, 0.25);
-    while (nbPulseFaitGauche <= nbPulseAFaireGauche)
-    {
-    	float erreur = 0;
-    	delay(100);
+	while (nbPulseFaitGauche <= nbPulseAFaireGauche)
+	{
+		float erreur = 0;
+		delay(40);
 		int pulseLeft = ENCODER_Read(LEFT);
 		int pulseRight = ENCODER_Read(RIGHT);
 		nbPulseFaitGauche += pulseLeft;
-		nbPulseVoulu += pulseRight*ratio;
+		nbPulseVoulu += pulseRight * ratio;
 
-		erreur = pulseRight*ratio - pulseLeft;
-		erreurTotale += nbPulseVoulu - nbPulseFaitGauche;
+		erreur = pulseRight * ratio - pulseLeft;
+		erreurTotale = nbPulseVoulu - nbPulseFaitGauche;
 
-        float correction = erreur * kp + erreurTotale * ki;
+		float correction = erreur * kp + erreurTotale * ki;
 		float newSpeed = previousSpeed + correction;
 		ENCODER_Reset(LEFT);
-    	ENCODER_Reset(RIGHT);
+		ENCODER_Reset(RIGHT);
 		MOTOR_SetSpeed(LEFT, newSpeed);
-		previousSpeed = newSpeed;    
-    }
-    MOTOR_SetSpeed(0, 0);
-    MOTOR_SetSpeed(1, 0);
+		previousSpeed = newSpeed;
+	}
+	MOTOR_SetSpeed(0, 0);
+	MOTOR_SetSpeed(1, 0);
 }
 
-void Tourner(int degree, int cote)
+void Tourner(float degree, int cote)
 {
 	int moteur = LEFT;
 	if (cote == LEFT)
@@ -287,97 +273,173 @@ void Tourner(int degree, int cote)
 	nbPulses = 3700; // 2 roues
 
 	// float arc  = angle*rayon;
-	//nbPulses = (3840 / 90) * degree;
-	float nbCms = 18.5 * (PI / 180) * degree;
-	int PULSE_PAR_CM = 3200 / (7.62 * PI);
-	nbPulses = nbCms * PULSE_PAR_CM;
+	// nbPulses = (3840 / 90) * degree;
+	float nbInches = 3.625 * 2 * PI * (degree / 360);
+	// float nbInches = 7.125 * 2 * PI * (degree/360);
+	float PULSE_PAR_INCHES = 3200 / (3 * PI);
+	nbPulses = nbInches * PULSE_PAR_INCHES;
 	int i = 0;
+	Serial.println(nbInches);
+	Serial.println(nbPulses);
 
 	while (i <= nbPulses)
 	{
-		Serial.println(nbPulses);
-		MOTOR_SetSpeed(moteur, 0.3);
-		// MOTOR_SetSpeed(1, -0.3);
-		i += ENCODER_ReadReset(moteur);
+		MOTOR_SetSpeed(moteur, 0.25);
+		// MOTOR_SetSpeed(RIGHT, -0.25);
+		//  MOTOR_SetSpeed(1, -0.3);
+		i = ENCODER_Read(moteur);
 	}
 
-	MOTOR_SetSpeed(moteur, 0);
+	MOTOR_SetSpeed(LEFT, 0);
+	MOTOR_SetSpeed(RIGHT, 0);
 	// MOTOR_SetSpeed(1, 0);
 }
 
-void Faire180()
+void Tourner2Roues(float degree)
 {
-	double nbPulses = 0;
-	int i = 0;
-	// nbPulses = 3620; //Robot A
-	nbPulses = 3950; // Robot B
-	while (i <= nbPulses)
-	{
-		Serial.println(nbPulses);
-		MOTOR_SetSpeed(0, 0.2);
-		MOTOR_SetSpeed(1, -0.2);
-		i += ENCODER_ReadReset(0);
-	}
-
-	MOTOR_SetSpeed(RIGHT, 0);
-	MOTOR_SetSpeed(LEFT, 0);
+	// Right = master
 	ENCODER_Reset(LEFT);
 	ENCODER_Reset(RIGHT);
+	float kp = 0.0005;
+	float ki = 0.00005;
+	float erreurTotale = 0;
+
+	int PULSE_PAR_UNIT = 3200 / (3 * PI); // 3pouces de diametres = 7,62 cm
+	float nbInches = 3.625 * 2 * PI * (degree / 360);
+	float nbPulseAFaire = nbInches * -PULSE_PAR_UNIT;
+	float nbPulseFait = 0;
+	float nbPulseVoulu = 0;
+	float previousSpeed = -0.22;
+	MOTOR_SetSpeed(LEFT, -0.22);
+	MOTOR_SetSpeed(RIGHT, 0.20);
+	while (nbPulseFait > nbPulseAFaire)
+	{
+		float erreur = 0;
+		delay(40);
+		int pulseLeft = ENCODER_Read(LEFT);
+		int pulseRight = ENCODER_Read(RIGHT);
+		nbPulseFait += pulseLeft;
+		nbPulseVoulu += pulseRight;
+
+		erreur = pulseRight - (-1 * pulseLeft);
+		erreurTotale = nbPulseVoulu - (-1 * nbPulseFait);
+
+		float correction = erreur * kp + erreurTotale * ki;
+		float newSpeed = previousSpeed - correction;
+
+		ENCODER_Reset(LEFT);
+		ENCODER_Reset(RIGHT);
+		MOTOR_SetSpeed(LEFT, newSpeed);
+		previousSpeed = newSpeed;
+	}
+	MOTOR_SetSpeed(0, 0);
+	MOTOR_SetSpeed(1, 0);
 }
+
+/*typedef struct
+{
+	int index;
+	float pulseValue;
+} SmallestIR;
+
+SmallestIR TrouverPlusPetitIR(int leftValue, int rightValue, int frontValue)
+{
+	SmallestIR retour = new SmallestIR();
+	if (distanceLeft < distanceRight)
+	{
+		if (distanceLeft < distanceFront)
+		{
+
+		}
+	}
+}*/
 
 void Reorienter()
 {
+	// 500
+	// 163
+	// 100
+	// 82
 
-	float nbCms = 18.5 * (PI / 180) * 360;
-	int PULSE_PAR_CM = 3200 / (7.62 * PI);
-	float nbPulsesNeeded = nbCms * PULSE_PAR_CM;
-	int i = 0;
-	float pulseMinIR = 0;
-	int minIR = 2000; //High Value
-
-	while (i <= nbPulsesNeeded/2)
+	// LEFT = 0
+	// FRONT = 1
+	// RIGHT = 2
+	int expectedIRValue = 0;
+	int couleur = 1; // FindColor
+	switch (couleur)
 	{
-		MOTOR_SetSpeed(LEFT, 0.2);
-		MOTOR_SetSpeed(RIGHT, -0.2);
-		delay(20);
-		
-		i = ENCODER_Read(LEFT);
-		
-		uint16_t valeurIR = ROBUS_ReadIR(0);
-		if (minIR > valeurIR)
+	case BLEU:
+		expectedIRValue = 500;
+		break;
+	case VERT:
+		expectedIRValue = 160;
+		break;
+	case JAUNE:
+		expectedIRValue = 100;
+		break;
+	case ROUGE:
+		expectedIRValue = 80;
+		break;
+	}
+	bool orientationTrouvee = false;
+
+	ENCODER_Reset(LEFT);
+	ENCODER_Reset(RIGHT);
+	float kp = 0.0005;
+	float ki = 0.00005;
+	float previousSpeed = -0.22;
+	float nbPulseFait = 0;
+	float nbPulseVoulu = 0;
+	float erreurTotale = 0;
+	MOTOR_SetSpeed(LEFT, previousSpeed);
+	MOTOR_SetSpeed(RIGHT, 0.20);
+	while (!orientationTrouvee)
+	{
+		float erreur = 0;
+		delay(40);
+		int pulseLeft = ENCODER_Read(LEFT);
+		int pulseRight = ENCODER_Read(RIGHT);
+		nbPulseFait += pulseLeft;
+		nbPulseVoulu += pulseRight;
+
+		erreur = pulseRight - (-1 * pulseLeft);
+		erreurTotale = nbPulseVoulu - (-1 * nbPulseFait);
+
+		float correction = erreur * kp + erreurTotale * ki;
+		float newSpeed = previousSpeed - correction;
+
+		ENCODER_Reset(LEFT);
+		ENCODER_Reset(RIGHT);
+
+		int distanceRight = ROBUS_ReadIR(2);
+		/*Serial.println(distanceRight);
+		Serial.println(expectedIRValue);
+		Serial.println(orientationTrouvee);
+		Serial.println("\n");*/
+		if (abs(distanceRight - expectedIRValue) <= 5)
 		{
-			minIR = valeurIR;
-			pulseMinIR = i;
+			orientationTrouvee = true;
+			MOTOR_SetSpeed(LEFT, 0);
+			MOTOR_SetSpeed(RIGHT, 0);
+		}
+		else
+		{			
+			MOTOR_SetSpeed(LEFT, newSpeed);
+			previousSpeed = newSpeed;
 		}
 	}
-	MOTOR_SetSpeed(LEFT, 0);
-	MOTOR_SetSpeed(RIGHT, 0);
-
-	delay(1000);
-
-	while (i >= pulseMinIR)
-	{
-		MOTOR_SetSpeed(LEFT, -0.2);
-		MOTOR_SetSpeed(RIGHT, 0.2);
-		delay(20);
-		
-		i = ENCODER_Read(LEFT);
-	}
-	MOTOR_SetSpeed(LEFT, 0);
-	MOTOR_SetSpeed(RIGHT, 0);
-	ENCODER_Reset(LEFT);
 }
 
 void BalayerSurface()
 {
 	float LARGEUR_ROBOT = 18.5;
-	//Test area = 129x126cm
+	// Test area = 129x126cm
 
-	//Avancer until it scans a line
-	//Snake until it scans another line
+	// Avancer until it scans a line
+	// Snake until it scans another line
 
 	float largeurBalayee = 0;
-	float largeurABalayer = 134; //To scan somehow
+	float largeurABalayer = 134; // To scan somehow
 	int nbLargeurFait = 0;
 
 	while (largeurBalayee < largeurABalayer)
@@ -391,13 +453,17 @@ void BalayerSurface()
 
 void testIR()
 {
-	while(true)
+	int somme = 0;
+	int n = 0;
+	while (true)
 	{
-		uint16_t valeurIR = ROBUS_ReadIR(0);
-		Serial.println(valeurIR);
-		delay(100);
+		int distanceRight = ROBUS_ReadIR(2);
+		somme += distanceRight;
+		n++;
+		float moyenne = somme / n;
+		Serial.println(moyenne);
+		delay(50);
 	}
-	
 }
 
 /* ****************************************************************************
@@ -417,7 +483,6 @@ Fonctions de boucle infini (loop())
 **************************************************************************** */
 // -> Se fait appeler perpetuellement suite au "setup"
 
-
 void loop()
 {
 	// SOFT_TIMER_Update(); // A decommenter pour utiliser des compteurs logiciels
@@ -425,10 +490,7 @@ void loop()
 	/*if (ROBUS_IsBumper(REAR))
 	{
 		// Différentes parties du parcours
-
-		//AvancerMasterSlave(84);
-		testIR();
-
+		Reorienter();
 
 		while (true)
 		{
@@ -439,10 +501,7 @@ void loop()
 	if (ROBUS_IsBumper(LEFT))
 	{
 		// Différentes parties du parcours
-
-		//AvancerMasterSlave(84);
-		faireArc(JAUNE);
-
+		testIR();
 
 		while (true)
 		{
@@ -453,9 +512,8 @@ void loop()
 	{
 		// Différentes parties du parcours
 
-		//AvancerMasterSlave(84);
-		faireArc(VERT);
-
+		// AvancerMasterSlave(84);
+		// FaireArc(VERT);
 
 		while (true)
 		{
@@ -466,9 +524,8 @@ void loop()
 	{
 		// Différentes parties du parcours
 
-		//AvancerMasterSlave(84);
-		faireArc(BLEU);
-
+		// AvancerMasterSlave(84);
+		// FaireArc(BLEU);
 
 		while (true)
 		{
