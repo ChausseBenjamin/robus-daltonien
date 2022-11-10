@@ -211,6 +211,55 @@ void AvancerMasterSlave(float distance)
 	MOTOR_SetSpeed(1, 0);
 }
 
+void AvancerMasterSlaveShortcut()
+{
+	// Right = master
+	ENCODER_Reset(LEFT);
+	ENCODER_Reset(RIGHT);
+	float kp = 0.0005;
+	float ki = 0.00002;
+	float erreurTotale = 0;
+	
+	float nbPulseFait = 0;
+	float nbPulseVoulu = 0;
+	float previousSpeed = 0.27;
+	MOTOR_SetSpeed(LEFT, 0.27);
+	MOTOR_SetSpeed(RIGHT, 0.25);
+	bool reachedShortcut = false;
+	while (!reachedShortcut)
+	{
+		float erreur = 0;
+		delay(40);
+		int pulseLeft = ENCODER_Read(LEFT);
+		int pulseRight = ENCODER_Read(RIGHT);
+		nbPulseFait += pulseLeft;
+		nbPulseVoulu += pulseRight;
+
+		erreur = pulseRight - pulseLeft;
+		erreurTotale = nbPulseVoulu - nbPulseFait;
+
+		float correction = erreur * kp + erreurTotale * ki;
+		float newSpeed = previousSpeed + correction;
+
+		ENCODER_Reset(LEFT);
+		ENCODER_Reset(RIGHT);
+		MOTOR_SetSpeed(LEFT, newSpeed);
+		previousSpeed = newSpeed;
+		int IRRight = ROBUS_ReadIR(2);
+		if (IRRight < 80)
+		{
+			reachedShortcut = true;
+		}
+	}
+	MOTOR_SetSpeed(0, 0);
+	MOTOR_SetSpeed(1, 0);
+	delay(500);
+	Tourner(90, RIGHT);
+	AvancerMasterSlave(40); //Until Green
+	Tourner(90, RIGHT);
+	AvancerMasterSlave(40); //Until Line
+}
+
 void FaireArc(int couleur)
 {
 	float rayonGauche = couleur * 12 + 6 + 3.625; // 3.625 = moitié largeur robot
@@ -260,6 +309,8 @@ void FaireArc(int couleur)
 
 void Tourner(float degree, int cote)
 {
+	ENCODER_Reset(LEFT);
+	ENCODER_Reset(RIGHT);
 	int moteur = LEFT;
 	if (cote == LEFT)
 	{
@@ -295,9 +346,16 @@ void Tourner(float degree, int cote)
 	// MOTOR_SetSpeed(1, 0);
 }
 
-void Tourner2Roues(float degree)
+void Tourner2Roues(float degree, int cote)
 {
+	int slaveIndex = LEFT;
+	int masterIndex = RIGHT;
 	// Right = master
+	if (cote == RIGHT)
+	{
+		slaveIndex = RIGHT;
+		masterIndex = LEFT;
+	}
 	ENCODER_Reset(LEFT);
 	ENCODER_Reset(RIGHT);
 	float kp = 0.0005;
@@ -310,18 +368,18 @@ void Tourner2Roues(float degree)
 	float nbPulseFait = 0;
 	float nbPulseVoulu = 0;
 	float previousSpeed = -0.22;
-	MOTOR_SetSpeed(LEFT, -0.22);
-	MOTOR_SetSpeed(RIGHT, 0.20);
+	MOTOR_SetSpeed(slaveIndex, -0.22);
+	MOTOR_SetSpeed(masterIndex, 0.20);
 	while (nbPulseFait > nbPulseAFaire)
 	{
 		float erreur = 0;
 		delay(40);
-		int pulseLeft = ENCODER_Read(LEFT);
-		int pulseRight = ENCODER_Read(RIGHT);
-		nbPulseFait += pulseLeft;
-		nbPulseVoulu += pulseRight;
+		int pulseSlave = ENCODER_Read(slaveIndex);
+		int pulseMaster = ENCODER_Read(masterIndex);
+		nbPulseFait += pulseSlave;
+		nbPulseVoulu += pulseMaster;
 
-		erreur = pulseRight - (-1 * pulseLeft);
+		erreur = pulseMaster - (-1 * pulseSlave);
 		erreurTotale = nbPulseVoulu - (-1 * nbPulseFait);
 
 		float correction = erreur * kp + erreurTotale * ki;
@@ -329,7 +387,7 @@ void Tourner2Roues(float degree)
 
 		ENCODER_Reset(LEFT);
 		ENCODER_Reset(RIGHT);
-		MOTOR_SetSpeed(LEFT, newSpeed);
+		MOTOR_SetSpeed(slaveIndex, newSpeed);
 		previousSpeed = newSpeed;
 	}
 	MOTOR_SetSpeed(0, 0);
@@ -354,7 +412,7 @@ SmallestIR TrouverPlusPetitIR(int leftValue, int rightValue, int frontValue)
 	}
 }*/
 
-void Reorienter()
+void ReorienterContinue()
 {
 	// 597
 	// 163
@@ -369,16 +427,16 @@ void Reorienter()
 	switch (couleur)
 	{
 	case BLEU:
-		expectedIRValue = 500;
+		expectedIRValue = 597;
 		break;
 	case VERT:
-		expectedIRValue = 160;
+		expectedIRValue = 163;
 		break;
 	case JAUNE:
-		expectedIRValue = 100;
+		expectedIRValue = 102;
 		break;
 	case ROUGE:
-		expectedIRValue = 80;
+		expectedIRValue = 82;
 		break;
 	}
 	bool orientationTrouvee = false;
@@ -416,16 +474,55 @@ void Reorienter()
 		Serial.println(expectedIRValue);
 		Serial.println(orientationTrouvee);
 		Serial.println("\n");*/
-		if (abs(distanceRight - expectedIRValue) <= 5)
+		if (abs(distanceRight - expectedIRValue) <= 2)
 		{
 			orientationTrouvee = true;
 			MOTOR_SetSpeed(LEFT, 0);
 			MOTOR_SetSpeed(RIGHT, 0);
 		}
 		else
-		{			
+		{
 			MOTOR_SetSpeed(LEFT, newSpeed);
 			previousSpeed = newSpeed;
+		}
+	}
+}
+
+void ReorienterPar60Deg()
+{
+	int maxValue = 0;
+	int currentNbRotations;
+	int maxNbRotations;
+
+	for (int i = 0; i < 6; i++)
+	{
+		int IRRight = ROBUS_ReadIR(2);
+		delay(50);
+
+		if (IRRight > maxValue)
+		{
+			maxValue = IRRight;
+			maxNbRotations = currentNbRotations;
+		}
+		Tourner2Roues(55.5, LEFT);
+		delay(500);
+		currentNbRotations++;
+	}
+
+	if (maxNbRotations > 3)
+	{
+		for (int i = 0; i < 6 - maxNbRotations; i++)
+		{
+			Tourner2Roues(57, RIGHT);
+			delay(500);
+		}
+	}
+	else
+	{
+		for (int i = 0; i < maxNbRotations; i++)
+		{
+			Tourner2Roues(55.5, LEFT);
+			delay(500);
 		}
 	}
 }
@@ -487,21 +584,30 @@ void loop()
 {
 	// SOFT_TIMER_Update(); // A decommenter pour utiliser des compteurs logiciels
 	delay(100); // Delais pour décharger le CPU
-	/*if (ROBUS_IsBumper(REAR))
+	if (ROBUS_IsBumper(REAR))
 	{
 		// Différentes parties du parcours
-		Reorienter();
+		ReorienterPar60Deg();
 
 		while (true)
 		{
-			/* do nothing --- needed to stop "loop" 
+			// do nothing --- needed to stop "loop"
 		}
-	}*/
-	
+	}
+
 	if (ROBUS_IsBumper(LEFT))
 	{
 		// Différentes parties du parcours
-		testIR();
+		for (int i = 0; i < 6; i++)
+		{
+			Tourner2Roues(57, RIGHT); // 55 works for 60 degrees
+			delay(500);
+		}
+		for (int i = 0; i < 6; i++)
+		{
+			Tourner2Roues(56, LEFT); // 55 works for 60 degrees
+			delay(500);
+		}
 
 		while (true)
 		{
