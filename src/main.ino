@@ -10,6 +10,10 @@ Date: Derniere date de modification
 Inclure les librairies de functions que vous voulez utiliser
 **************************************************************************** */
 #include <LibRobus.h> // Essentielle pour utiliser RobUS
+#include <Wire.h>
+#include "Adafruit_TCS34725.h"
+#include <SoftwareSerial.h>
+#include <SPI.h>
 
 using namespace std;
 
@@ -22,6 +26,22 @@ Variables globales et defines
 #define VERT 1
 #define JAUNE 2
 #define ROUGE 3
+
+// Pick analog outputs, for the UNO these three work well
+// use ~560  ohm resistor between Red & Blue, ~1K for green (its brighter)
+#define redpin 28
+#define yellowpin 22
+#define greenpin 26
+#define bluepin 24
+// for a common anode LED, connect the common pin to +5V
+// for common cathode, connect the common to groundé
+
+// set to false if using a common cathode LED
+#define commonAnode false
+
+// our RGB -> eye-recognized gamma color
+byte gammatable[256];
+Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_50MS, TCS34725_GAIN_4X);
 
 /* ****************************************************************************
 Vos propres fonctions sont creees ici
@@ -219,7 +239,7 @@ void AvancerMasterSlaveShortcut()
 	float kp = 0.0005;
 	float ki = 0.00002;
 	float erreurTotale = 0;
-	
+
 	float nbPulseFait = 0;
 	float nbPulseVoulu = 0;
 	float previousSpeed = 0.27;
@@ -255,9 +275,9 @@ void AvancerMasterSlaveShortcut()
 	MOTOR_SetSpeed(1, 0);
 	delay(500);
 	Tourner(90, RIGHT);
-	AvancerMasterSlave(40); //Until Green
+	AvancerMasterSlave(40); // Until Green
 	Tourner(90, RIGHT);
-	AvancerMasterSlave(40); //Until Line
+	AvancerMasterSlave(40); // Until Line
 }
 
 void FaireArc(int couleur)
@@ -573,12 +593,142 @@ Fonctions d'initialisation (setup)
 void setup()
 {
 	BoardInit();
+	// pinMode(3,OUTPUT); // redpin est une broche de sortie
+
+	if (tcs.begin())
+	{
+		// Serial.println("Found sensor");
+		tcs.setInterrupt(false); // turn on LED
+	}
+	else
+	{
+		// Serial.println("No TCS34725 found ... check your connections");
+		while (1)
+			; // halt!
+	}
+
+	// use these three pins to drive an LED
+	pinMode(redpin, OUTPUT);
+	pinMode(greenpin, OUTPUT);
+	pinMode(bluepin, OUTPUT);
+	pinMode(yellowpin, OUTPUT);
+
+	// thanks PhilB for this gamma table!
+	// it helps convert RGB colors to what humans see
+	for (int i = 0; i < 256; i++)
+	{
+		float x = i;
+		x /= 255;
+		x = pow(x, 2.5);
+		x *= 255;
+
+		if (commonAnode)
+		{
+			gammatable[i] = 255 - x;
+		}
+		else
+		{
+			gammatable[i] = x;
+		}
+		// Serial.println(gammatable[i]);
+	}
 }
 
 /* ****************************************************************************
 Fonctions de boucle infini (loop())
 **************************************************************************** */
 // -> Se fait appeler perpetuellement suite au "setup"
+
+int DeterminerCouleur()
+{
+	uint16_t clear, red, green, blue;
+
+	delay(150); // takes 50ms to read
+
+	tcs.getRawData(&red, &green, &blue, &clear);
+
+	/*Serial.print("C:\t"); Serial.print(clear);
+	Serial.print("\tR:\t"); Serial.print(red);
+	Serial.print("\tG:\t"); Serial.print(green);
+	Serial.print("\tB:\t"); Serial.print(blue);*/
+
+	// Figure out some basic hex code for visualization
+	uint32_t sum = clear;
+	float r, g, b;
+	r = red;   // r /= sum;
+	g = green; // g /= sum;
+	b = blue;  // b /= sum;
+	// r *= 256; g *= 256; b *= 256;
+	/*Serial.print("\t");
+	Serial.print((int)r, HEX);
+	Serial.print((int)g, HEX);
+	Serial.print((int)b, HEX);
+	Serial.println();*/
+	int retour = color(red, blue, green);
+	void turnoff();
+	// Serial.print((int)r ); Serial.print(" "); Serial.print((int)g);Serial.print(" ");  Serial.println((int)b );
+
+	/* analogWrite(redpin, gammatable[(int)r]);
+	 analogWrite(greenpin, gammatable[(int)g]);
+	 analogWrite(bluepin, gammatable[(int)b]);*/
+
+	 return retour;
+}
+
+int color(int red, int blue, int green)
+{
+	int retour = 0;
+	// if(red && blue=0 && green=0 )
+	if (red < blue && red > green)
+	{ // rouge
+		turnoff();
+		digitalWrite(redpin, HIGH);
+		// Serial.println("rouge");
+
+		// pinMode(redpin,OUTPUT);
+		retour = ROUGE;
+	}
+	else if (blue > 1.9 * red && green < 1.2 * blue)
+	{
+		turnoff();
+		digitalWrite(greenpin, HIGH);
+		// Serial.println("vert");
+		retour = VERT;
+	}
+
+	else if (green > 1.5 * red && green < blue)
+	{
+		turnoff();
+		digitalWrite(bluepin, HIGH);
+		// Serial.println("bleu");
+		retour = BLEU;
+	}
+	else if (red > 1.3 * blue && red > green)
+	{
+		turnoff();
+		digitalWrite(yellowpin, HIGH);
+		// Serial.println("jaune");
+		retour = JAUNE;
+	}
+	return retour;
+}
+/*else if(blue>1.5*red && blue>1.1*green){
+		Serial.println("noir");
+	}
+	else if(blue>red && green>red){
+		Serial.println("blanc");
+	}*/
+/* else{
+	Serial.println("tapis");
+ }*/
+
+void turnoff()
+{
+	digitalWrite(redpin, LOW);
+	digitalWrite(greenpin, LOW);
+	digitalWrite(bluepin, LOW);
+	digitalWrite(yellowpin, LOW);
+}
 
 void loop()
 {
