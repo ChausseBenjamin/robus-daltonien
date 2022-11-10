@@ -10,7 +10,7 @@ Date: Derniere date de modification
 Inclure les librairies de functions que vous voulez utiliser
 **************************************************************************** */
 #include <LibRobus.h> // Essentielle pour utiliser RobUS
-
+//#include "color.h"
 using namespace std;
 
 /* ****************************************************************************
@@ -22,6 +22,7 @@ Variables globales et defines
 #define VERT 1
 #define JAUNE 2
 #define ROUGE 3
+#define PIN_SUIVEUR A0
 
 /* ****************************************************************************
 Vos propres fonctions sont creees ici
@@ -430,6 +431,82 @@ void Reorienter()
 	}
 }
 
+void Suivre_Ligne()
+{
+	//Couleur = color;
+	//cette fonction va débuter lorsque les trois capteurs détectent du blanc. Autrement dit, lorsque :
+	//analogRead(PIN_SUIVEUR) > 4.65
+	//AvancerMasterSlave(6);
+	//Tourner(45, RIGHT);
+	float lecture = analogRead(PIN_SUIVEUR);
+	while (lecture > 952.0) //avancer tout droit jusqu'à ce que tu vois une ligne noire
+	{
+		AvancerMasterSlave(0.01);
+		lecture = analogRead(PIN_SUIVEUR);
+	}
+	Tourner(25, RIGHT);
+	while (1)
+	{
+		if (lecture >= 0.0 && lecture < 82.0) //Tous ne détectent pas de blanc
+		{
+			Serial.println("\nAucun");
+			Serial.println(lecture);
+			AvancerMasterSlave(0.02); //on se redresse et on avance d'un pouce
+		}
+		else if (lecture >= 82.0 && lecture < 225.2) //Seulement bleu détecte du blanc
+		{
+			Serial.println("Bleu");
+			Serial.println(lecture);
+			Tourner(25, LEFT);
+			AvancerMasterSlave(0.02); //on se redresse et on avance d'un pouce
+		}
+		else if (lecture >= 225.2 && lecture < 368.6) //Seulement jaune détecte du blanc
+		{
+			Serial.println("Jaune");
+			Serial.println(lecture);
+			AvancerMasterSlave(0.02);	//un peu weird comme lecture pcq jaune est au centre
+		}
+		else if (lecture >= 368.6 && lecture < 512) //Jaune et bleu détectent du blanc
+		{
+			Serial.println("Jaune et bleu");
+			Serial.println(lecture);
+			Tourner(25, LEFT);
+			AvancerMasterSlave(0.02);
+		}
+		else if (lecture >= 512 && lecture < 655.3) //Seulement rouge détecte du blanc
+		{
+			Serial.println("Rouge");
+			Serial.println(lecture);
+			Tourner(30, RIGHT);
+			AvancerMasterSlave(0.02);
+		}
+		else if (lecture >= 655.3 && lecture < 809.0) //Rouge et bleu détectent du blanc
+		{
+			Serial.println("Rouge et bleu");
+			Serial.println(lecture);
+			AvancerMasterSlave(0.02);; //on est pile au centre
+		}
+		else if (lecture >= 809.0 && lecture < 952) //Rouge et jaune détectent du blanc
+		{
+			Serial.println("Rouge et jaune");
+			Serial.println(lecture);
+			Tourner(30, RIGHT);
+			AvancerMasterSlave(0.02);
+		}
+		else //Tous les capteurs détectent du blanc
+		{
+			Serial.println("Tous");
+			Serial.println(lecture);
+			//Tourner(8, RIGHT);
+			AvancerMasterSlave(0.02);;
+		}
+		delay(10);
+		lecture = analogRead(PIN_SUIVEUR);
+	}
+	//AvancerMasterSlave(6);
+	Tourner(45, RIGHT); //pour se redresser
+}
+
 void BalayerSurface()
 {
 	float LARGEUR_ROBOT = 18.5;
@@ -487,6 +564,7 @@ void loop()
 {
 	// SOFT_TIMER_Update(); // A decommenter pour utiliser des compteurs logiciels
 	delay(100); // Delais pour décharger le CPU
+	SERVO_SetAngle(1,0);
 	/*if (ROBUS_IsBumper(REAR))
 	{
 		// Différentes parties du parcours
@@ -508,10 +586,10 @@ void loop()
 			/* do nothing --- needed to stop "loop" */
 		}
 	}
-	if (ROBUS_IsBumper(FRONT))
+	if (ROBUS_IsBumper(REAR))
 	{
 		// Différentes parties du parcours
-
+		Suivre_Ligne();
 		// AvancerMasterSlave(84);
 		// FaireArc(VERT);
 
