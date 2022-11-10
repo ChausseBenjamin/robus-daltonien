@@ -10,7 +10,11 @@ Date: Derniere date de modification
 Inclure les librairies de functions que vous voulez utiliser
 **************************************************************************** */
 #include <LibRobus.h> // Essentielle pour utiliser RobUS
-//#include "color.h"
+#include <Wire.h>
+#include "Adafruit_TCS34725.h"
+#include <SoftwareSerial.h>
+#include <SPI.h>
+
 using namespace std;
 
 /* ****************************************************************************
@@ -23,6 +27,22 @@ Variables globales et defines
 #define JAUNE 2
 #define ROUGE 3
 #define PIN_SUIVEUR A0
+
+// Pick analog outputs, for the UNO these three work well
+// use ~560  ohm resistor between Red & Blue, ~1K for green (its brighter)
+#define redpin 28
+#define yellowpin 22
+#define greenpin 26
+#define bluepin 24
+// for a common anode LED, connect the common pin to +5V
+// for common cathode, connect the common to groundé
+
+// set to false if using a common cathode LED
+#define commonAnode false
+
+// our RGB -> eye-recognized gamma color
+byte gammatable[256];
+Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_50MS, TCS34725_GAIN_4X);
 
 /* ****************************************************************************
 Vos propres fonctions sont creees ici
@@ -212,6 +232,55 @@ void AvancerMasterSlave(float distance)
 	MOTOR_SetSpeed(1, 0);
 }
 
+void AvancerMasterSlaveShortcut()
+{
+	// Right = master
+	ENCODER_Reset(LEFT);
+	ENCODER_Reset(RIGHT);
+	float kp = 0.0005;
+	float ki = 0.00002;
+	float erreurTotale = 0;
+
+	float nbPulseFait = 0;
+	float nbPulseVoulu = 0;
+	float previousSpeed = 0.27;
+	MOTOR_SetSpeed(LEFT, 0.27);
+	MOTOR_SetSpeed(RIGHT, 0.25);
+	bool reachedShortcut = false;
+	while (!reachedShortcut)
+	{
+		float erreur = 0;
+		delay(40);
+		int pulseLeft = ENCODER_Read(LEFT);
+		int pulseRight = ENCODER_Read(RIGHT);
+		nbPulseFait += pulseLeft;
+		nbPulseVoulu += pulseRight;
+
+		erreur = pulseRight - pulseLeft;
+		erreurTotale = nbPulseVoulu - nbPulseFait;
+
+		float correction = erreur * kp + erreurTotale * ki;
+		float newSpeed = previousSpeed + correction;
+
+		ENCODER_Reset(LEFT);
+		ENCODER_Reset(RIGHT);
+		MOTOR_SetSpeed(LEFT, newSpeed);
+		previousSpeed = newSpeed;
+		int IRRight = ROBUS_ReadIR(2);
+		if (IRRight < 80)
+		{
+			reachedShortcut = true;
+		}
+	}
+	MOTOR_SetSpeed(0, 0);
+	MOTOR_SetSpeed(1, 0);
+	delay(500);
+	Tourner(90, RIGHT);
+	AvancerMasterSlave(40); // Until Green
+	Tourner(90, RIGHT);
+	AvancerMasterSlave(40); // Until Line
+}
+
 void FaireArc(int couleur)
 {
 	float rayonGauche = couleur * 12 + 6 + 3.625; // 3.625 = moitié largeur robot
@@ -261,6 +330,8 @@ void FaireArc(int couleur)
 
 void Tourner(float degree, int cote)
 {
+	ENCODER_Reset(LEFT);
+	ENCODER_Reset(RIGHT);
 	int moteur = LEFT;
 	if (cote == LEFT)
 	{
@@ -296,9 +367,16 @@ void Tourner(float degree, int cote)
 	// MOTOR_SetSpeed(1, 0);
 }
 
-void Tourner2Roues(float degree)
+void Tourner2Roues(float degree, int cote)
 {
+	int slaveIndex = LEFT;
+	int masterIndex = RIGHT;
 	// Right = master
+	if (cote == RIGHT)
+	{
+		slaveIndex = RIGHT;
+		masterIndex = LEFT;
+	}
 	ENCODER_Reset(LEFT);
 	ENCODER_Reset(RIGHT);
 	float kp = 0.0005;
@@ -311,18 +389,18 @@ void Tourner2Roues(float degree)
 	float nbPulseFait = 0;
 	float nbPulseVoulu = 0;
 	float previousSpeed = -0.22;
-	MOTOR_SetSpeed(LEFT, -0.22);
-	MOTOR_SetSpeed(RIGHT, 0.20);
+	MOTOR_SetSpeed(slaveIndex, -0.22);
+	MOTOR_SetSpeed(masterIndex, 0.20);
 	while (nbPulseFait > nbPulseAFaire)
 	{
 		float erreur = 0;
 		delay(40);
-		int pulseLeft = ENCODER_Read(LEFT);
-		int pulseRight = ENCODER_Read(RIGHT);
-		nbPulseFait += pulseLeft;
-		nbPulseVoulu += pulseRight;
+		int pulseSlave = ENCODER_Read(slaveIndex);
+		int pulseMaster = ENCODER_Read(masterIndex);
+		nbPulseFait += pulseSlave;
+		nbPulseVoulu += pulseMaster;
 
-		erreur = pulseRight - (-1 * pulseLeft);
+		erreur = pulseMaster - (-1 * pulseSlave);
 		erreurTotale = nbPulseVoulu - (-1 * nbPulseFait);
 
 		float correction = erreur * kp + erreurTotale * ki;
@@ -330,7 +408,7 @@ void Tourner2Roues(float degree)
 
 		ENCODER_Reset(LEFT);
 		ENCODER_Reset(RIGHT);
-		MOTOR_SetSpeed(LEFT, newSpeed);
+		MOTOR_SetSpeed(slaveIndex, newSpeed);
 		previousSpeed = newSpeed;
 	}
 	MOTOR_SetSpeed(0, 0);
@@ -355,7 +433,7 @@ SmallestIR TrouverPlusPetitIR(int leftValue, int rightValue, int frontValue)
 	}
 }*/
 
-void Reorienter()
+void ReorienterContinue()
 {
 	// 597
 	// 163
@@ -370,16 +448,16 @@ void Reorienter()
 	switch (couleur)
 	{
 	case BLEU:
-		expectedIRValue = 500;
+		expectedIRValue = 597;
 		break;
 	case VERT:
-		expectedIRValue = 160;
+		expectedIRValue = 163;
 		break;
 	case JAUNE:
-		expectedIRValue = 100;
+		expectedIRValue = 102;
 		break;
 	case ROUGE:
-		expectedIRValue = 80;
+		expectedIRValue = 82;
 		break;
 	}
 	bool orientationTrouvee = false;
@@ -417,16 +495,55 @@ void Reorienter()
 		Serial.println(expectedIRValue);
 		Serial.println(orientationTrouvee);
 		Serial.println("\n");*/
-		if (abs(distanceRight - expectedIRValue) <= 5)
+		if (abs(distanceRight - expectedIRValue) <= 2)
 		{
 			orientationTrouvee = true;
 			MOTOR_SetSpeed(LEFT, 0);
 			MOTOR_SetSpeed(RIGHT, 0);
 		}
 		else
-		{			
+		{
 			MOTOR_SetSpeed(LEFT, newSpeed);
 			previousSpeed = newSpeed;
+		}
+	}
+}
+
+void ReorienterPar60Deg()
+{
+	int maxValue = 0;
+	int currentNbRotations;
+	int maxNbRotations;
+
+	for (int i = 0; i < 6; i++)
+	{
+		int IRRight = ROBUS_ReadIR(2);
+		delay(50);
+
+		if (IRRight > maxValue)
+		{
+			maxValue = IRRight;
+			maxNbRotations = currentNbRotations;
+		}
+		Tourner2Roues(55.5, LEFT);
+		delay(500);
+		currentNbRotations++;
+	}
+
+	if (maxNbRotations > 3)
+	{
+		for (int i = 0; i < 6 - maxNbRotations; i++)
+		{
+			Tourner2Roues(57, RIGHT);
+			delay(500);
+		}
+	}
+	else
+	{
+		for (int i = 0; i < maxNbRotations; i++)
+		{
+			Tourner2Roues(55.5, LEFT);
+			delay(500);
 		}
 	}
 }
@@ -553,6 +670,45 @@ Fonctions d'initialisation (setup)
 void setup()
 {
 	BoardInit();
+	// pinMode(3,OUTPUT); // redpin est une broche de sortie
+
+	if (tcs.begin())
+	{
+		// Serial.println("Found sensor");
+		tcs.setInterrupt(false); // turn on LED
+	}
+	else
+	{
+		// Serial.println("No TCS34725 found ... check your connections");
+		while (1)
+			; // halt!
+	}
+
+	// use these three pins to drive an LED
+	pinMode(redpin, OUTPUT);
+	pinMode(greenpin, OUTPUT);
+	pinMode(bluepin, OUTPUT);
+	pinMode(yellowpin, OUTPUT);
+
+	// thanks PhilB for this gamma table!
+	// it helps convert RGB colors to what humans see
+	for (int i = 0; i < 256; i++)
+	{
+		float x = i;
+		x /= 255;
+		x = pow(x, 2.5);
+		x *= 255;
+
+		if (commonAnode)
+		{
+			gammatable[i] = 255 - x;
+		}
+		else
+		{
+			gammatable[i] = x;
+		}
+		// Serial.println(gammatable[i]);
+	}
 }
 
 /* ****************************************************************************
@@ -560,26 +716,126 @@ Fonctions de boucle infini (loop())
 **************************************************************************** */
 // -> Se fait appeler perpetuellement suite au "setup"
 
+int DeterminerCouleur()
+{
+	uint16_t clear, red, green, blue;
+
+	delay(150); // takes 50ms to read
+
+	tcs.getRawData(&red, &green, &blue, &clear);
+
+	/*Serial.print("C:\t"); Serial.print(clear);
+	Serial.print("\tR:\t"); Serial.print(red);
+	Serial.print("\tG:\t"); Serial.print(green);
+	Serial.print("\tB:\t"); Serial.print(blue);*/
+
+	// Figure out some basic hex code for visualization
+	uint32_t sum = clear;
+	float r, g, b;
+	r = red;   // r /= sum;
+	g = green; // g /= sum;
+	b = blue;  // b /= sum;
+	// r *= 256; g *= 256; b *= 256;
+	/*Serial.print("\t");
+	Serial.print((int)r, HEX);
+	Serial.print((int)g, HEX);
+	Serial.print((int)b, HEX);
+	Serial.println();*/
+	int retour = color(red, blue, green);
+	void turnoff();
+	// Serial.print((int)r ); Serial.print(" "); Serial.print((int)g);Serial.print(" ");  Serial.println((int)b );
+
+	/* analogWrite(redpin, gammatable[(int)r]);
+	 analogWrite(greenpin, gammatable[(int)g]);
+	 analogWrite(bluepin, gammatable[(int)b]);*/
+
+	 return retour;
+}
+
+int color(int red, int blue, int green)
+{
+	int retour = 0;
+	// if(red && blue=0 && green=0 )
+	if (red < blue && red > green)
+	{ // rouge
+		turnoff();
+		digitalWrite(redpin, HIGH);
+		// Serial.println("rouge");
+
+		// pinMode(redpin,OUTPUT);
+		retour = ROUGE;
+	}
+	else if (blue > 1.9 * red && green < 1.2 * blue)
+	{
+		turnoff();
+		digitalWrite(greenpin, HIGH);
+		// Serial.println("vert");
+		retour = VERT;
+	}
+
+	else if (green > 1.5 * red && green < blue)
+	{
+		turnoff();
+		digitalWrite(bluepin, HIGH);
+		// Serial.println("bleu");
+		retour = BLEU;
+	}
+	else if (red > 1.3 * blue && red > green)
+	{
+		turnoff();
+		digitalWrite(yellowpin, HIGH);
+		// Serial.println("jaune");
+		retour = JAUNE;
+	}
+	return retour;
+}
+/*else if(blue>1.5*red && blue>1.1*green){
+		Serial.println("noir");
+	}
+	else if(blue>red && green>red){
+		Serial.println("blanc");
+	}*/
+/* else{
+	Serial.println("tapis");
+ }*/
+
+void turnoff()
+{
+	digitalWrite(redpin, LOW);
+	digitalWrite(greenpin, LOW);
+	digitalWrite(bluepin, LOW);
+	digitalWrite(yellowpin, LOW);
+}
+
 void loop()
 {
 	// SOFT_TIMER_Update(); // A decommenter pour utiliser des compteurs logiciels
 	delay(100); // Delais pour décharger le CPU
 	SERVO_SetAngle(1,0);
-	/*if (ROBUS_IsBumper(REAR))
+	if (ROBUS_IsBumper(REAR))
 	{
 		// Différentes parties du parcours
-		Reorienter();
+		Suivre_Ligne();
 
 		while (true)
 		{
-			/* do nothing --- needed to stop "loop" 
+			// do nothing --- needed to stop "loop"
 		}
-	}*/
-	
+	}
+
 	if (ROBUS_IsBumper(LEFT))
 	{
 		// Différentes parties du parcours
-		testIR();
+		for (int i = 0; i < 6; i++)
+		{
+			Tourner2Roues(57, RIGHT); // 55 works for 60 degrees
+			delay(500);
+		}
+		for (int i = 0; i < 6; i++)
+		{
+			Tourner2Roues(56, LEFT); // 55 works for 60 degrees
+			delay(500);
+		}
 
 		while (true)
 		{
