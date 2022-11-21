@@ -27,10 +27,12 @@ Variables globales et defines
 #define JAUNE 2
 #define ROUGE 3
 #define PIN_SUIVEUR A0
+#define MICRO_AMBIANT A1
+#define MICRO_5K A2
 
 // Pick analog outputs, for the UNO these three work well
 // use ~560  ohm resistor between Red & Blue, ~1K for green (its brighter)
-#define redpin 28
+#define redpin 30
 #define yellowpin 22
 #define greenpin 26
 #define bluepin 24
@@ -205,8 +207,8 @@ void AvancerMasterSlave(float distance)
 	float nbPulseAFaire = distance * PULSE_PAR_UNIT;
 	float nbPulseFait = 0;
 	float nbPulseVoulu = 0;
-	float previousSpeed = 0.27;
-	MOTOR_SetSpeed(LEFT, 0.27);
+	float previousSpeed = 0.25;
+	MOTOR_SetSpeed(LEFT, 0.25);
 	MOTOR_SetSpeed(RIGHT, 0.25);
 	while (nbPulseFait < nbPulseAFaire)
 	{
@@ -232,55 +234,6 @@ void AvancerMasterSlave(float distance)
 	MOTOR_SetSpeed(1, 0);
 }
 
-void AvancerMasterSlaveShortcut()
-{
-	// Right = master
-	ENCODER_Reset(LEFT);
-	ENCODER_Reset(RIGHT);
-	float kp = 0.0005;
-	float ki = 0.00002;
-	float erreurTotale = 0;
-
-	float nbPulseFait = 0;
-	float nbPulseVoulu = 0;
-	float previousSpeed = 0.27;
-	MOTOR_SetSpeed(LEFT, 0.27);
-	MOTOR_SetSpeed(RIGHT, 0.25);
-	bool reachedShortcut = false;
-	while (!reachedShortcut)
-	{
-		float erreur = 0;
-		delay(40);
-		int pulseLeft = ENCODER_Read(LEFT);
-		int pulseRight = ENCODER_Read(RIGHT);
-		nbPulseFait += pulseLeft;
-		nbPulseVoulu += pulseRight;
-
-		erreur = pulseRight - pulseLeft;
-		erreurTotale = nbPulseVoulu - nbPulseFait;
-
-		float correction = erreur * kp + erreurTotale * ki;
-		float newSpeed = previousSpeed + correction;
-
-		ENCODER_Reset(LEFT);
-		ENCODER_Reset(RIGHT);
-		MOTOR_SetSpeed(LEFT, newSpeed);
-		previousSpeed = newSpeed;
-		int IRRight = ROBUS_ReadIR(2);
-		if (IRRight < 80)
-		{
-			reachedShortcut = true;
-		}
-	}
-	MOTOR_SetSpeed(0, 0);
-	MOTOR_SetSpeed(1, 0);
-	delay(500);
-	Tourner(90, RIGHT);
-	AvancerMasterSlave(40); // Until Green
-	Tourner(90, RIGHT);
-	AvancerMasterSlave(40); // Until Line
-}
-
 void FaireArc(int couleur)
 {
 	float rayonGauche = couleur * 12 + 6 + 3.625; // 3.625 = moitié largeur robot
@@ -293,39 +246,48 @@ void FaireArc(int couleur)
 	float nbPulseAFaireGauche = arcGauche * PULSE_PAR_UNIT;
 	float nbPulseAFaireDroit = arcDroit * PULSE_PAR_UNIT;
 
-	float ratio = nbPulseAFaireGauche / nbPulseAFaireDroit;
-	ENCODER_Reset(LEFT);
-	ENCODER_Reset(RIGHT);
-	float kp = 0.0005;
-	float ki = 0.00002;
-	float erreurTotale = 0;
-
-	float nbPulseFaitGauche = 0;
-	float nbPulseVoulu = 0;
-	float previousSpeed = 0.27 * ratio;
-	MOTOR_SetSpeed(LEFT, 0.27 * ratio);
-	MOTOR_SetSpeed(RIGHT, 0.25);
-	while (nbPulseFaitGauche <= nbPulseAFaireGauche)
+	if (couleur == BLEU)
 	{
-		float erreur = 0;
-		delay(40);
-		int pulseLeft = ENCODER_Read(LEFT);
-		int pulseRight = ENCODER_Read(RIGHT);
-		nbPulseFaitGauche += pulseLeft;
-		nbPulseVoulu += pulseRight * ratio;
-
-		erreur = pulseRight * ratio - pulseLeft;
-		erreurTotale = nbPulseVoulu - nbPulseFaitGauche;
-
-		float correction = erreur * kp + erreurTotale * ki;
-		float newSpeed = previousSpeed + correction;
+		AvancerMasterSlave(2);
+		Tourner(90, RIGHT);
+		AvancerMasterSlave(2);
+	}
+	else
+	{
+		float ratio = nbPulseAFaireGauche / nbPulseAFaireDroit;
 		ENCODER_Reset(LEFT);
 		ENCODER_Reset(RIGHT);
-		MOTOR_SetSpeed(LEFT, newSpeed);
-		previousSpeed = newSpeed;
+		float kp = 0.0005;
+		float ki = 0.00002;
+		float erreurTotale = 0;
+
+		float nbPulseFaitGauche = 0;
+		float nbPulseVoulu = 0;
+		float previousSpeed = 0.25 * ratio;
+		MOTOR_SetSpeed(LEFT, 0.25 * ratio);
+		MOTOR_SetSpeed(RIGHT, 0.25);
+		while (nbPulseFaitGauche <= nbPulseAFaireGauche)
+		{
+			float erreur = 0;
+			delay(40);
+			int pulseLeft = ENCODER_Read(LEFT);
+			int pulseRight = ENCODER_Read(RIGHT);
+			nbPulseFaitGauche += pulseLeft;
+			nbPulseVoulu += pulseRight * ratio;
+
+			erreur = pulseRight * ratio - pulseLeft;
+			erreurTotale = nbPulseVoulu - nbPulseFaitGauche;
+
+			float correction = erreur * kp + erreurTotale * ki;
+			float newSpeed = previousSpeed + correction;
+			ENCODER_Reset(LEFT);
+			ENCODER_Reset(RIGHT);
+			MOTOR_SetSpeed(LEFT, newSpeed);
+			previousSpeed = newSpeed;
+		}
+		MOTOR_SetSpeed(0, 0);
+		MOTOR_SetSpeed(1, 0);
 	}
-	MOTOR_SetSpeed(0, 0);
-	MOTOR_SetSpeed(1, 0);
 }
 
 void Tourner(float degree, int cote)
@@ -346,7 +308,7 @@ void Tourner(float degree, int cote)
 
 	// float arc  = angle*rayon;
 	// nbPulses = (3840 / 90) * degree;
-	float nbInches = 3.625 * 2 * PI * (degree / 360);
+	float nbInches = 7.25 * 2 * PI * (degree / 360);
 	// float nbInches = 7.125 * 2 * PI * (degree/360);
 	float PULSE_PAR_INCHES = 3200 / (3 * PI);
 	nbPulses = nbInches * PULSE_PAR_INCHES;
@@ -369,14 +331,7 @@ void Tourner(float degree, int cote)
 
 void Tourner2Roues(float degree, int cote)
 {
-	int slaveIndex = LEFT;
-	int masterIndex = RIGHT;
 	// Right = master
-	if (cote == RIGHT)
-	{
-		slaveIndex = RIGHT;
-		masterIndex = LEFT;
-	}
 	ENCODER_Reset(LEFT);
 	ENCODER_Reset(RIGHT);
 	float kp = 0.0005;
@@ -389,18 +344,18 @@ void Tourner2Roues(float degree, int cote)
 	float nbPulseFait = 0;
 	float nbPulseVoulu = 0;
 	float previousSpeed = -0.22;
-	MOTOR_SetSpeed(slaveIndex, -0.22);
-	MOTOR_SetSpeed(masterIndex, 0.20);
+	MOTOR_SetSpeed(LEFT, -0.22);
+	MOTOR_SetSpeed(RIGHT, 0.20);
 	while (nbPulseFait > nbPulseAFaire)
 	{
 		float erreur = 0;
 		delay(40);
-		int pulseSlave = ENCODER_Read(slaveIndex);
-		int pulseMaster = ENCODER_Read(masterIndex);
-		nbPulseFait += pulseSlave;
-		nbPulseVoulu += pulseMaster;
+		int pulseLeft = ENCODER_Read(LEFT);
+		int pulseRight = ENCODER_Read(RIGHT);
+		nbPulseFait += pulseLeft;
+		nbPulseVoulu += pulseRight;
 
-		erreur = pulseMaster - (-1 * pulseSlave);
+		erreur = pulseRight - (-1 * pulseLeft);
 		erreurTotale = nbPulseVoulu - (-1 * nbPulseFait);
 
 		float correction = erreur * kp + erreurTotale * ki;
@@ -408,7 +363,7 @@ void Tourner2Roues(float degree, int cote)
 
 		ENCODER_Reset(LEFT);
 		ENCODER_Reset(RIGHT);
-		MOTOR_SetSpeed(slaveIndex, newSpeed);
+		MOTOR_SetSpeed(LEFT, newSpeed);
 		previousSpeed = newSpeed;
 	}
 	MOTOR_SetSpeed(0, 0);
@@ -509,7 +464,7 @@ void ReorienterContinue()
 	}
 }
 
-void ReorienterPar60Deg()
+int ReorienterPar60Deg(int couleurDepart)
 {
 	int maxValue = 0;
 	int currentNbRotations;
@@ -530,98 +485,110 @@ void ReorienterPar60Deg()
 		currentNbRotations++;
 	}
 
-	if (maxNbRotations > 3)
+	for (int i = 0; i < 6 - maxNbRotations; i++)
 	{
-		for (int i = 0; i < 6 - maxNbRotations; i++)
-		{
-			Tourner2Roues(57, RIGHT);
-			delay(500);
-		}
+		Tourner2Roues(55.5, LEFT);
+		delay(500);
 	}
-	else
+
+	int minDiffCouleur = 1000;
+	int diffBleu = abs(maxValue - 500);
+	if (minDiffCouleur > diffBleu)
 	{
-		for (int i = 0; i < maxNbRotations; i++)
-		{
-			Tourner2Roues(55.5, LEFT);
-			delay(500);
-		}
+		minDiffCouleur = diffBleu;
+		couleurDepart = BLEU;
 	}
+	int diffVert = abs(maxValue - 163);
+	if (minDiffCouleur > diffVert)
+	{
+		minDiffCouleur = diffVert;
+		couleurDepart = VERT;
+	}
+	int diffJaune = abs(maxValue - 103);
+	if (minDiffCouleur > diffJaune)
+	{
+		minDiffCouleur = diffJaune;
+		couleurDepart = JAUNE;
+	}
+	return couleurDepart;
 }
 
 void Suivre_Ligne()
 {
-	//Couleur = color;
-	//cette fonction va débuter lorsque les trois capteurs détectent du blanc. Autrement dit, lorsque :
-	//analogRead(PIN_SUIVEUR) > 4.65
-	//AvancerMasterSlave(6);
-	//Tourner(45, RIGHT);
+	// Couleur = color;
+	// cette fonction va débuter lorsque les trois capteurs détectent du blanc. Autrement dit, lorsque :
+	// analogRead(PIN_SUIVEUR) > 4.65
+	// AvancerMasterSlave(6);
+	// Tourner(45, RIGHT);
 	float lecture = analogRead(PIN_SUIVEUR);
-	while (lecture > 952.0) //avancer tout droit jusqu'à ce que tu vois une ligne noire
+	/*while (lecture > 952.0) //avancer tout droit jusqu'à ce que tu vois une ligne noire
 	{
 		AvancerMasterSlave(0.01);
 		lecture = analogRead(PIN_SUIVEUR);
-	}
+	}*/
 	Tourner(25, RIGHT);
 	while (1)
 	{
-		if (lecture >= 0.0 && lecture < 82.0) //Tous ne détectent pas de blanc
+		if (lecture >= 0.0 && lecture < 82.0) // Tous ne détectent pas de blanc
 		{
 			Serial.println("\nAucun");
 			Serial.println(lecture);
-			AvancerMasterSlave(0.02); //on se redresse et on avance d'un pouce
+			AvancerMasterSlave(0.02); // on se redresse et on avance d'un pouce
 		}
-		else if (lecture >= 82.0 && lecture < 225.2) //Seulement bleu détecte du blanc
+		else if (lecture >= 82.0 && lecture < 225.2) // Seulement bleu détecte du blanc
 		{
 			Serial.println("Bleu");
 			Serial.println(lecture);
 			Tourner(25, LEFT);
-			AvancerMasterSlave(0.02); //on se redresse et on avance d'un pouce
+			AvancerMasterSlave(0.02); // on se redresse et on avance d'un pouce
 		}
-		else if (lecture >= 225.2 && lecture < 368.6) //Seulement jaune détecte du blanc
+		else if (lecture >= 225.2 && lecture < 368.6) // Seulement jaune détecte du blanc
 		{
 			Serial.println("Jaune");
 			Serial.println(lecture);
-			AvancerMasterSlave(0.02);	//un peu weird comme lecture pcq jaune est au centre
+			AvancerMasterSlave(0.02); // un peu weird comme lecture pcq jaune est au centre
 		}
-		else if (lecture >= 368.6 && lecture < 512) //Jaune et bleu détectent du blanc
+		else if (lecture >= 368.6 && lecture < 512) // Jaune et bleu détectent du blanc
 		{
 			Serial.println("Jaune et bleu");
 			Serial.println(lecture);
 			Tourner(25, LEFT);
 			AvancerMasterSlave(0.02);
 		}
-		else if (lecture >= 512 && lecture < 655.3) //Seulement rouge détecte du blanc
+		else if (lecture >= 512 && lecture < 655.3) // Seulement rouge détecte du blanc
 		{
 			Serial.println("Rouge");
 			Serial.println(lecture);
 			Tourner(30, RIGHT);
 			AvancerMasterSlave(0.02);
 		}
-		else if (lecture >= 655.3 && lecture < 809.0) //Rouge et bleu détectent du blanc
+		else if (lecture >= 655.3 && lecture < 809.0) // Rouge et bleu détectent du blanc
 		{
 			Serial.println("Rouge et bleu");
 			Serial.println(lecture);
-			AvancerMasterSlave(0.02);; //on est pile au centre
+			AvancerMasterSlave(0.02);
+			; // on est pile au centre
 		}
-		else if (lecture >= 809.0 && lecture < 952) //Rouge et jaune détectent du blanc
+		else if (lecture >= 809.0 && lecture < 952) // Rouge et jaune détectent du blanc
 		{
 			Serial.println("Rouge et jaune");
 			Serial.println(lecture);
 			Tourner(30, RIGHT);
 			AvancerMasterSlave(0.02);
 		}
-		else //Tous les capteurs détectent du blanc
+		else // Tous les capteurs détectent du blanc
 		{
 			Serial.println("Tous");
 			Serial.println(lecture);
-			//Tourner(8, RIGHT);
-			AvancerMasterSlave(0.02);;
+			// Tourner(8, RIGHT);
+			AvancerMasterSlave(0.02);
+			;
 		}
 		delay(10);
 		lecture = analogRead(PIN_SUIVEUR);
 	}
-	//AvancerMasterSlave(6);
-	Tourner(45, RIGHT); //pour se redresser
+	// AvancerMasterSlave(6);
+	Tourner(45, RIGHT); // pour se redresser
 }
 
 void BalayerSurface()
@@ -672,27 +639,27 @@ void setup()
 	BoardInit();
 	// pinMode(3,OUTPUT); // redpin est une broche de sortie
 
-	if (tcs.begin())
+	/*if (tcs.begin())
 	{
-		// Serial.println("Found sensor");
+		Serial.println("Found sensor");
 		tcs.setInterrupt(false); // turn on LED
 	}
 	else
 	{
-		// Serial.println("No TCS34725 found ... check your connections");
+		Serial.println("No TCS34725 found ... check your connections");
 		while (1)
 			; // halt!
-	}
+	}*/
 
 	// use these three pins to drive an LED
-	pinMode(redpin, OUTPUT);
+	/*pinMode(redpin, OUTPUT);
 	pinMode(greenpin, OUTPUT);
 	pinMode(bluepin, OUTPUT);
-	pinMode(yellowpin, OUTPUT);
+	pinMode(yellowpin, OUTPUT);*/
 
 	// thanks PhilB for this gamma table!
 	// it helps convert RGB colors to what humans see
-	for (int i = 0; i < 256; i++)
+	/*for (int i = 0; i < 256; i++)
 	{
 		float x = i;
 		x /= 255;
@@ -708,7 +675,7 @@ void setup()
 			gammatable[i] = x;
 		}
 		// Serial.println(gammatable[i]);
-	}
+	}*/
 }
 
 /* ****************************************************************************
@@ -749,7 +716,7 @@ int DeterminerCouleur()
 	 analogWrite(greenpin, gammatable[(int)g]);
 	 analogWrite(bluepin, gammatable[(int)b]);*/
 
-	 return retour;
+	return retour;
 }
 
 int color(int red, int blue, int green)
@@ -807,15 +774,65 @@ void turnoff()
 	digitalWrite(yellowpin, LOW);
 }
 
+void Micro()
+{
+	float ambiant = 0;
+	float Micro5k = 0;
+	float diff = 0;
+
+	ambiant = analogRead(MICRO_AMBIANT);
+	Micro5k = analogRead(MICRO_5K);
+	diff = Micro5k - ambiant;
+
+	while (diff < 60)
+	{
+		Serial.println(diff);
+		ambiant = analogRead(MICRO_AMBIANT);
+		Micro5k = analogRead(MICRO_5K);
+		diff = Micro5k - ambiant;
+	}
+}
+
 void loop()
 {
 	// SOFT_TIMER_Update(); // A decommenter pour utiliser des compteurs logiciels
 	delay(100); // Delais pour décharger le CPU
-	SERVO_SetAngle(1,0);
+	//SERVO_SetAngle(1, 0);
+
+	int couleurDepart = 1000;
+	/*Micro();
+	couleurDepart = ReorienterPar60Deg(couleurDepart);
+	SERVO_SetAngle(1, 90);
+	FaireArc(couleurDepart);
+	AvancerMasterSlave(24);
+	FaireArc(couleurDepart);
+	AvancerMasterSlave(8 * 12);
+	Suivre_Ligne();*/
 	if (ROBUS_IsBumper(REAR))
 	{
 		// Différentes parties du parcours
-		Suivre_Ligne();
+		//AvancerMasterSlave(18); // Depart 3e
+		AvancerMasterSlave(42); // Depart 3e
+		//AvancerMasterSlave(30); // Depart 5e
+		while (true)
+		{
+			FaireArc(VERT);
+			AvancerMasterSlave(18);
+			FaireArc(VERT);
+			AvancerMasterSlave(30);
+			Tourner(5, RIGHT);
+			AvancerMasterSlave(66);
+			FaireArc(VERT);
+			AvancerMasterSlave(17);
+			FaireArc(VERT);
+			AvancerMasterSlave(66);
+			Tourner(5, RIGHT);
+			AvancerMasterSlave(30);
+		}
+		/*Tourner(90, RIGHT);
+		AvancerMasterSlave(48);
+		Tourner(90, RIGHT);
+		AvancerMasterSlave(66);*/
 
 		while (true)
 		{
@@ -836,18 +853,6 @@ void loop()
 			Tourner2Roues(56, LEFT); // 55 works for 60 degrees
 			delay(500);
 		}
-
-		while (true)
-		{
-			/* do nothing --- needed to stop "loop" */
-		}
-	}
-	if (ROBUS_IsBumper(REAR))
-	{
-		// Différentes parties du parcours
-		Suivre_Ligne();
-		// AvancerMasterSlave(84);
-		// FaireArc(VERT);
 
 		while (true)
 		{
