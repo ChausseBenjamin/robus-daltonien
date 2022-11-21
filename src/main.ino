@@ -200,20 +200,41 @@ void AvancerMasterSlave(float distance)
 	ENCODER_Reset(LEFT);
 	ENCODER_Reset(RIGHT);
 	float kp = 0.0005;
-	float ki = 0.00002;
+	float ki = 0.00005;
 	float erreurTotale = 0;
 
 	int PULSE_PAR_UNIT = 3200 / (3 * PI); // 3pouces de diametres = 7,62 cm
 	float nbPulseAFaire = distance * PULSE_PAR_UNIT;
 	float nbPulseFait = 0;
 	float nbPulseVoulu = 0;
-	float previousSpeed = 0.25;
-	MOTOR_SetSpeed(LEFT, 0.25);
-	MOTOR_SetSpeed(RIGHT, 0.25);
+	float previousSpeedLeft = 0.15;
+	float previousSpeedRight = 0.15;
+	MOTOR_SetSpeed(LEFT, 0.15);
+	MOTOR_SetSpeed(RIGHT, 0.15);
+	bool wasStopped = false;
 	while (nbPulseFait < nbPulseAFaire)
 	{
 		float erreur = 0;
 		delay(40);
+		int valueIR0 = ROBUS_ReadIR(0);
+		int valueIR1 = ROBUS_ReadIR(1);
+		if (valueIR0 > 300 || valueIR1 > 300)
+		{
+			while (valueIR0 > 300 || valueIR1 > 300)
+			{
+				delay(25);
+				valueIR0 = ROBUS_ReadIR(0);
+				valueIR1 = ROBUS_ReadIR(1);
+				MOTOR_SetSpeed(LEFT, 0);
+				MOTOR_SetSpeed(RIGHT, 0);
+				wasStopped = true;
+			}
+		}
+		if (wasStopped)
+		{
+			MOTOR_SetSpeed(LEFT, 0.15);
+			MOTOR_SetSpeed(RIGHT, 0.15);
+		}
 		int pulseLeft = ENCODER_Read(LEFT);
 		int pulseRight = ENCODER_Read(RIGHT);
 		nbPulseFait += pulseLeft;
@@ -223,12 +244,28 @@ void AvancerMasterSlave(float distance)
 		erreurTotale = nbPulseVoulu - nbPulseFait;
 
 		float correction = erreur * kp + erreurTotale * ki;
-		float newSpeed = previousSpeed + correction;
+		float newSpeedLeft = previousSpeedLeft + correction;
+		float newSpeedRight = previousSpeedRight;
+
+		if (previousSpeedRight < 0.3 && nbPulseAFaire - nbPulseFait > 5000)
+		{
+			float ratio = previousSpeedRight / newSpeedLeft;
+			newSpeedRight = previousSpeedRight + 0.005;
+			newSpeedLeft = newSpeedRight / ratio;
+		}
+		if (previousSpeedRight > 0.15 && nbPulseAFaire - nbPulseFait < 5000)
+		{
+			float ratio = previousSpeedRight / newSpeedLeft;
+			newSpeedRight = previousSpeedRight - 0.005;
+			newSpeedLeft = newSpeedRight / ratio;
+		}
 
 		ENCODER_Reset(LEFT);
 		ENCODER_Reset(RIGHT);
-		MOTOR_SetSpeed(LEFT, newSpeed);
-		previousSpeed = newSpeed;
+		MOTOR_SetSpeed(LEFT, newSpeedLeft);
+		MOTOR_SetSpeed(RIGHT, newSpeedRight);
+		previousSpeedLeft = newSpeedLeft;
+		previousSpeedRight = newSpeedRight;
 	}
 	MOTOR_SetSpeed(0, 0);
 	MOTOR_SetSpeed(1, 0);
@@ -331,7 +368,13 @@ void Tourner(float degree, int cote)
 
 void Tourner2Roues(float degree, int cote)
 {
-	// Right = master
+	int roueMaster = LEFT;
+	int roueSlave = RIGHT;
+	if (cote == RIGHT)
+	{
+		roueMaster = RIGHT;
+		roueSlave = LEFT;
+	}
 	ENCODER_Reset(LEFT);
 	ENCODER_Reset(RIGHT);
 	float kp = 0.0005;
@@ -344,18 +387,18 @@ void Tourner2Roues(float degree, int cote)
 	float nbPulseFait = 0;
 	float nbPulseVoulu = 0;
 	float previousSpeed = -0.22;
-	MOTOR_SetSpeed(LEFT, -0.22);
-	MOTOR_SetSpeed(RIGHT, 0.20);
+	MOTOR_SetSpeed(roueSlave, -0.22);
+	MOTOR_SetSpeed(roueMaster, 0.20);
 	while (nbPulseFait > nbPulseAFaire)
 	{
 		float erreur = 0;
 		delay(40);
-		int pulseLeft = ENCODER_Read(LEFT);
-		int pulseRight = ENCODER_Read(RIGHT);
-		nbPulseFait += pulseLeft;
-		nbPulseVoulu += pulseRight;
+		int pulseSlave = ENCODER_Read(roueSlave);
+		int pulseMaster = ENCODER_Read(roueMaster);
+		nbPulseFait += pulseSlave;
+		nbPulseVoulu += pulseMaster;
 
-		erreur = pulseRight - (-1 * pulseLeft);
+		erreur = pulseMaster - (-1 * pulseSlave);
 		erreurTotale = nbPulseVoulu - (-1 * nbPulseFait);
 
 		float correction = erreur * kp + erreurTotale * ki;
@@ -363,7 +406,7 @@ void Tourner2Roues(float degree, int cote)
 
 		ENCODER_Reset(LEFT);
 		ENCODER_Reset(RIGHT);
-		MOTOR_SetSpeed(LEFT, newSpeed);
+		MOTOR_SetSpeed(roueSlave, newSpeed);
 		previousSpeed = newSpeed;
 	}
 	MOTOR_SetSpeed(0, 0);
@@ -591,24 +634,34 @@ void Suivre_Ligne()
 	Tourner(45, RIGHT); // pour se redresser
 }
 
-void BalayerSurface()
+void BalayerSurface(float longueurAFaire, float largeurAFaire)
 {
-	float LARGEUR_ROBOT = 18.5;
-	// Test area = 129x126cm
-
-	// Avancer until it scans a line
-	// Snake until it scans another line
+	// Doit être dirigé vers la droite (on doit voir son côté droit)
+	float LARGEUR_ROBOT = 7.25; // 18.5cm - 7.25in
 
 	float largeurBalayee = 0;
-	float largeurABalayer = 134; // To scan somehow
 	int nbLargeurFait = 0;
 
-	while (largeurBalayee < largeurABalayer)
+	AvancerMasterSlave(largeurAFaire / 2);
+	Tourner2Roues(87 * 2, RIGHT);
+	while (largeurBalayee < largeurAFaire)
 	{
-		AvancerDistanceConstant(132);
+		if (nbLargeurFait > 0)
+		{
+			int directionVirage = nbLargeurFait % 2;
+			if (directionVirage == 1)
+			{
+				Tourner(185, directionVirage);
+			}
+			else
+			{
+				Tourner(180, directionVirage);
+			}
+		}
+		delay(200);
+		AvancerMasterSlave(longueurAFaire);
 		largeurBalayee += LARGEUR_ROBOT;
 		nbLargeurFait++;
-		Tourner(180, nbLargeurFait % 2);
 	}
 }
 
@@ -618,12 +671,16 @@ void testIR()
 	int n = 0;
 	while (true)
 	{
-		int distanceRight = ROBUS_ReadIR(2);
+		int distanceRight = ROBUS_ReadIR(0);
 		somme += distanceRight;
 		n++;
 		float moyenne = somme / n;
-		Serial.println(moyenne);
-		delay(50);
+		Serial.print("Valeur : ");
+		Serial.print(distanceRight);
+		Serial.print(" --- Moyenne : ");
+		Serial.print(moyenne);
+		Serial.println("\n");
+		delay(25);
 	}
 }
 
@@ -797,7 +854,7 @@ void loop()
 {
 	// SOFT_TIMER_Update(); // A decommenter pour utiliser des compteurs logiciels
 	delay(100); // Delais pour décharger le CPU
-	//SERVO_SetAngle(1, 0);
+	// SERVO_SetAngle(1, 0);
 
 	int couleurDepart = 1000;
 	/*Micro();
@@ -810,29 +867,7 @@ void loop()
 	Suivre_Ligne();*/
 	if (ROBUS_IsBumper(REAR))
 	{
-		// Différentes parties du parcours
-		//AvancerMasterSlave(18); // Depart 3e
-		AvancerMasterSlave(42); // Depart 3e
-		//AvancerMasterSlave(30); // Depart 5e
-		while (true)
-		{
-			FaireArc(VERT);
-			AvancerMasterSlave(18);
-			FaireArc(VERT);
-			AvancerMasterSlave(30);
-			Tourner(5, RIGHT);
-			AvancerMasterSlave(66);
-			FaireArc(VERT);
-			AvancerMasterSlave(17);
-			FaireArc(VERT);
-			AvancerMasterSlave(66);
-			Tourner(5, RIGHT);
-			AvancerMasterSlave(30);
-		}
-		/*Tourner(90, RIGHT);
-		AvancerMasterSlave(48);
-		Tourner(90, RIGHT);
-		AvancerMasterSlave(66);*/
+		AvancerMasterSlave(82);
 
 		while (true)
 		{
@@ -842,29 +877,19 @@ void loop()
 
 	if (ROBUS_IsBumper(LEFT))
 	{
-		// Différentes parties du parcours
-		for (int i = 0; i < 6; i++)
-		{
-			Tourner2Roues(57, RIGHT); // 55 works for 60 degrees
-			delay(500);
-		}
-		for (int i = 0; i < 6; i++)
-		{
-			Tourner2Roues(56, LEFT); // 55 works for 60 degrees
-			delay(500);
-		}
-
-		while (true)
-		{
-			/* do nothing --- needed to stop "loop" */
-		}
+		/*Tourner2Roues(87, RIGHT);
+		delay(1000);
+		Tourner2Roues(87, LEFT);
+		delay(1000);
+		Tourner2Roues(87*2, LEFT);
+		delay(1000);*/
+		Tourner(90, LEFT);
+		delay(1000);
+		Tourner(90, RIGHT);
 	}
 	if (ROBUS_IsBumper(RIGHT))
 	{
-		// Différentes parties du parcours
-
-		// AvancerMasterSlave(84);
-		// FaireArc(BLEU);
+		BalayerSurface(60, 60);
 
 		while (true)
 		{
